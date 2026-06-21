@@ -1,0 +1,35 @@
+name: Hardened Agent CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  audit-and-build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Node.js Security Audit
+      uses: actions/setup-node@v4
+      with:
+        node-level: '24'
+        cache: 'npm'
+    - run: |
+        npm ci
+        npm audit --audit-level=high # Fails the build if high CVE dependencies exist
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets::DOCKERHUB_USERNAME }}
+        password: ${{ secrets::DOCKERHUB_TOKEN }}
+
+    - name: Build and Push Hardened Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/hardened-agent:latest

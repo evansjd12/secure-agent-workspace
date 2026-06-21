@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # Gate A: DefenseClaw Security Sidecar
+  defenseclaw-proxy:
+    image: defenseclaw/gateway:latest
+    container_name: defenseclaw_proxy
+    ports:
+      - "4000:4000"
+    volumes:
+      # Integrity Anchor: Mount security policies as Read-Only
+      - ./policies:/etc/defenseclaw/policies:ro
+    networks:
+      - secure_backend
+
+  # Gate B: NemoClaw Inspired Hardened Agent Core
+  agent-runtime:
+    image: ${DOCKERHUB_USERNAME}/hardened-agent:latest
+    container_name: active_agent_core
+    read_only: true # Enforces an completely immutable root filesystem
+    tmpfs:
+      - /tmp:size=64m # Small scratchpad for script execution logs
+    security_opt:
+      - no-new-privileges:true # Prevents prompt injections from scaling to host root privileges
+    cap_drop:
+      - ALL # Strips all default root Linux kernel capabilities
+    ulimits:
+      nproc: 512 # Caps processes to block recursive fork-bombs
+    environment:
+      - DEFENSECLAW_PROXY_URL=http://defenseclaw-proxy:4000
+    depends_on:
+      - defenseclaw-proxy
+    networks:
+      - secure_backend
+
+networks:
+  secure_backend:
+    driver: bridge
+    # Gate C: Declarative Network Whitelisting
+    # In a full k3s/OpenShell setup, this network is toggled to internal: true
+    # to explicitly block unauthorized internet mapping or outbound leaks.
